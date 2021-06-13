@@ -221,6 +221,13 @@ def send_mail(book_id, book_format, convert, kindle_mail, calibrepath, user_id):
     return _(u"The requested file could not be read. Maybe wrong permissions?")
 
 
+import re
+def safe_filename(filename):
+    """
+    使用中文命名
+    """
+    return re.sub(r"[\/\\\:\*\?\"\<\>\|]", "_", filename)  # 替换为下划线
+
 def get_valid_filename(value, replace_whitespace=True):
     """
     Returns the given string converted to a string that can be used for a clean
@@ -229,7 +236,13 @@ def get_valid_filename(value, replace_whitespace=True):
     if value[-1:] == u'.':
         value = value[:-1]+u'_'
     value = value.replace("/", "_").replace(":", "_").strip('\0')
-    if use_unidecode:
+
+    enable_unidecode = use_unidecode
+    # 使用中中文命名
+    enable_unidecode = False
+    value = safe_filename(value)
+
+    if enable_unidecode:
         value = (unidecode.unidecode(value))
     else:
         value = value.replace(u'§', u'SS')
