@@ -89,7 +89,35 @@ class TaskConvert(CalibreTask):
         # check to see if destination format already exists - or if book is in database
         # if it does - mark the conversion task as complete and return a success
         # this will allow send to kindle workflow to continue to work
-        if os.path.isfile(file_path + format_new_ext) or\
+
+        # 修复bug:文件已存在但在data表中无数据，则不能再重新转换
+        # if os.path.isfile(file_path + format_new_ext) or\
+        #     local_db.get_book_format(self.bookid, self.settings['new_book_format']):
+        #     log.info("Book id %d already converted to %s", book_id, format_new_ext)
+        #     cur_book = local_db.get_book(book_id)
+        #     self.results['path'] = file_path
+        #     self.results['title'] = cur_book.title
+        #     self._handleSuccess()
+        #     local_db.session.close()
+        #     return os.path.basename(file_path + format_new_ext)
+        # else:
+        #     log.info("Book id %d - target format of %s does not exist. Moving forward with convert.",
+        #              book_id,
+        #              format_new_ext)
+        #
+        # if config.config_kepubifypath and format_old_ext == '.epub' and format_new_ext == '.kepub':
+        #     check, error_message = self._convert_kepubify(file_path,
+        #                                                   format_old_ext,
+        #                                                   format_new_ext)
+        # else:
+        #     # check if calibre converter-executable is existing
+        #     if not os.path.exists(config.config_converterpath):
+        #         # ToDo Text is not translated
+        #         self._handleError(_(u"Calibre ebook-convert %(tool)s not found", tool=config.config_converterpath))
+        #         return
+        #     check, error_message = self._convert_calibre(file_path, format_old_ext, format_new_ext)
+
+        if os.path.isfile(file_path + format_new_ext) and \
             local_db.get_book_format(self.bookid, self.settings['new_book_format']):
             log.info("Book id %d already converted to %s", book_id, format_new_ext)
             cur_book = local_db.get_book(book_id)
@@ -103,17 +131,20 @@ class TaskConvert(CalibreTask):
                      book_id,
                      format_new_ext)
 
-        if config.config_kepubifypath and format_old_ext == '.epub' and format_new_ext == '.kepub':
-            check, error_message = self._convert_kepubify(file_path,
-                                                          format_old_ext,
-                                                          format_new_ext)
+        if not os.path.isfile(file_path + format_new_ext):
+            if config.config_kepubifypath and format_old_ext == '.epub' and format_new_ext == '.kepub':
+                check, error_message = self._convert_kepubify(file_path,
+                                                              format_old_ext,
+                                                              format_new_ext)
+            else:
+                # check if calibre converter-executable is existing
+                if not os.path.exists(config.config_converterpath):
+                    # ToDo Text is not translated
+                    self._handleError(_(u"Calibre ebook-convert %(tool)s not found", tool=config.config_converterpath))
+                    return
+                check, error_message = self._convert_calibre(file_path, format_old_ext, format_new_ext)
         else:
-            # check if calibre converter-executable is existing
-            if not os.path.exists(config.config_converterpath):
-                # ToDo Text is not translated
-                self._handleError(_(u"Calibre ebook-convert %(tool)s not found", tool=config.config_converterpath))
-                return
-            check, error_message = self._convert_calibre(file_path, format_old_ext, format_new_ext)
+            check = 0
 
         if check == 0:
             cur_book = local_db.get_book(book_id)
@@ -199,7 +230,17 @@ class TaskConvert(CalibreTask):
             return 1, _(u"Ebook-converter failed: %(error)s", error=e)
 
         while p.poll() is None:
-            nextline = p.stdout.readline()
+            # 修复转换失败问题，重试5次
+            try_cnt = 0
+            while try_cnt < 5:
+                try:
+                    nextline = p.stdout.readline()
+                    try_cnt = 5
+                except Exception as e:
+                    try_cnt = try_cnt + 1
+                    log.info(e)
+
+            # nextline = p.stdout.readline()
             if os.name == 'nt' and sys.version_info < (3, 0):
                 nextline = nextline.decode('windows-1252')
             elif os.name == 'posix' and sys.version_info < (3, 0):
