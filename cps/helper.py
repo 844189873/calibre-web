@@ -238,7 +238,7 @@ def get_valid_filename(value, replace_whitespace=True):
     value = value.replace("/", "_").replace(":", "_").strip('\0')
 
     enable_unidecode = use_unidecode
-    # 使用中中文命名
+    # 使用中文命名
     enable_unidecode = False
     value = safe_filename(value)
 
@@ -855,8 +855,14 @@ def get_download_link(book_id, book_format, client):
         file_name = get_valid_filename(file_name)
         headers = Headers()
         headers["Content-Type"] = mimetypes.types_map.get('.' + book_format, "application/octet-stream")
-        headers["Content-Disposition"] = "attachment; filename=%s.%s; filename*=UTF-8''%s.%s" % (
-            quote(file_name.encode('utf-8')), book_format, quote(file_name.encode('utf-8')), book_format)
+
+        # 使用中文命名
+        # headers["Content-Disposition"] = "attachment; filename=%s.%s; filename*=UTF-8''%s.%s" % (
+        #     quote(file_name.encode('utf-8')), book_format, quote(file_name.encode('utf-8')), book_format)
+
+        headers["Content-Disposition"] = "attachment; filename*=UTF-8''%s.%s" % (
+            quote(book.title.encode('utf-8')), book_format)
+
         return do_download_file(book, book_format, client, data1, headers)
     else:
         abort(404)
